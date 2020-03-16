@@ -66,6 +66,13 @@ class StackManager(EsiBase):
                       "'services.{2}.worker.configured' property is set to 'false'. That is not a valid state." \
                       "Please resolve this conflict".format(state["name"], stack, stack)
             self.set_property(False, stack)
+        elif state["status"] in ('CREATE_FAILED', 'ROLLBACK_COMPLETE'):
+            if 'false' == self._get_property('services.{0}.worker.configured'.format(stack)):
+                # looks like a stack was created manually so the problem should be resolved manually
+                print "Detected failed stack {0} in the {1} service account, at the same time " \
+                      "'services.{2}.worker.configured' property is set to 'false'. That is not a valid state." \
+                      "Please resolve this conflict".format(state["name"], stack, stack)
+            self.set_property(False, stack)
         elif state["status"] == 'DELETE_IN_PROGRESS':
             print "Stack '{0}' is already in {1} state.".format(state["name"], state["status"])
         elif state["status"] == 'CREATE_IN_PROGRESS':
@@ -128,8 +135,9 @@ class StackManager(EsiBase):
                         r.logical_resource_id, r.physical_resource_id, state["name"])
         elif stack_status == 'NOT_FOUND':
             print "Can not detect stack status for {0} service".format(stack)
-        elif stack_status == 'CREATE_FAILED':
-            print 'Stack creation failed. You need to check system logs for errors.'
+        elif stack_status in ('CREATE_FAILED', 'ROLLBACK_COMPLETE'):
+            print ('Stack creation failed. Please check system logs and stack events for errors.\n'
+                   'Delete and re-create stack to try again.')
         else:
             print "Stack '{0}' currently is in {1} state.".format(state["name"], stack_status)
 
