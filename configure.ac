@@ -6,6 +6,8 @@ UPDATES_MIRROR=http://linux.mirrors.es.net/centos/7/updates/x86_64/
 EPEL_MIRROR=http://linux.mirrors.es.net/epel/7/x86_64/
 EUCALYPTUS_MIRROR=http://downloads.eucalyptus.com/software/eucalyptus/4.4/rhel/7/x86_64/
 EUCA2OOLS_MIRROR=http://downloads.eucalyptus.com/software/euca2ools/3.3/rhel/7/x86_64/
+BASEIMAGE=
+USEBASEIMAGE=
 
 AC_ARG_WITH(install-tree,
     [  --with-install-tree=<dir>       the location of the install tree],
@@ -25,6 +27,12 @@ AC_ARG_WITH(eucalyptus-mirror,
 AC_ARG_WITH(euca2ools-mirror,
     [  --with-euca2ools-mirror=<dir>   the location of the euca2ools mirror],
     [EUCA2OOLS_MIRROR="${withval}"])
+AC_ARG_WITH(base-image-file,
+    [  --with-base-image-file          the location of an existing base image],
+    [USEBASEIMAGE="${withval}"])
+AC_ARG_ENABLE(base-image-only,
+    [  --enable-base-image-only        build a base image],
+    [BASEIMAGE="true"])
 
 AC_PATH_PROG(PYTHON, python)
 AC_PATH_PROG(VIRSH, virsh)
@@ -48,6 +56,7 @@ fi
 AC_CONFIG_FILES([
     Makefile
     eucalyptus-service-image.ks
+    eucalyptus-service-image-post.sh
 ])
 AC_SUBST(INSTALL_TREE)
 AC_SUBST(BASE_MIRROR)
@@ -59,4 +68,6 @@ AC_SUBST(VIRSH)
 AC_SUBST(VIRT_INSTALL)
 AC_SUBST(VIRT_SYSPREP)
 AC_SUBST(VIRT_SPARSIFY)
+AC_SUBST(BASEIMAGE)
+AC_SUBST(USEBASEIMAGE)
 AC_OUTPUT

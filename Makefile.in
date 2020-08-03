@@ -7,6 +7,8 @@ prefix = @prefix@
 datarootdir = @datarootdir@
 datadir = @datadir@
 imagedir = @datadir@/eucalyptus/service-images
+baseimage = @BASEIMAGE@
+usebaseimage = @USEBASEIMAGE@
 
 define destroyvm
 virsh undefine $<; virsh destroy $<; true
@@ -23,6 +25,10 @@ build-py: setup.py $(wildcard bin/*) $(wildcard esitoolsupport/*)
 
 build/image/eucalyptus-service-image.raw: eucalyptus-service-image.ks
 	mkdir -m 777 -p build/image
+ifneq ($(strip $(usebaseimage)),)
+	mv $(usebaseimage) $@
+	touch $@
+else
 	$(destroyvm)
 	@PYTHON@ -c 'import pty, sys; pty.spawn(sys.argv[1:])' \
 		@VIRT_INSTALL@ --name $< \
@@ -39,8 +45,14 @@ build/image/eucalyptus-service-image.raw: eucalyptus-service-image.ks
 	@VIRT_SYSPREP@ -a $@
 	@VIRT_SPARSIFY@ $@ $@.sparse
 	mv $@.sparse $@
+endif
 
 %.tar.xz: %.raw
+ifeq ($(strip $(baseimage)),)
+	/bin/bash eucalyptus-service-image-post.sh $<
+	@VIRT_SPARSIFY@ $< $<.sparse
+	mv $<.sparse $<
+endif
 	XZ_OPT=-8e tar -cJS -C $$(dirname $<) -f $@ $$(basename $<)
 
 install: build/image/eucalyptus-service-image.tar.xz install-py
