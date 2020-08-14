@@ -1,0 +1,95 @@
+#!/bin/bash
+# Post base image creation steps
+#
+# The base image should not have any eucalyptus build specific content
+# the post step will customize the image.
+#
+set -euxo pipefail
+
+# Config
+IMAGE_PATH="${1:-eucalyptus-service-image.raw}"
+IMAGE_MOUNT="${IMAGE_MOUNT:-/tmp/image}"
+REPO_BASE="${REPO_BASE:-@BASE_MIRROR@}"
+REPO_UPDATES="${REPO_UPDATES:-@UPDATES_MIRROR@}"
+REPO_EPEL="${REPO_EPEL:-@EPEL_MIRROR@}"
+REPO_EUCALYPTUS="${REPO_EUCALYPTUS:-@EUCALYPTUS_MIRROR@}"
+REPO_EUCA2OOLS="${REPO_EUCA2OOLS:-@EUCA2OOLS_MIRROR@}"
+
+# Image setup
+LOOP_DEVICE=$(losetup --find)
+MAPPER_P1_DEVICE="/dev/mapper/${LOOP_DEVICE##/dev/}p1"
+
+image_post_cleanup ()
+{
+  umount "${IMAGE_MOUNT}/tmp"             || true
+  umount "${IMAGE_MOUNT}/dev"             || true
+  umount "${IMAGE_MOUNT}/etc/resolv.conf" || true
+  umount "${IMAGE_MOUNT}"                 || true
+  kpartx -d "${LOOP_DEVICE}"              || true
+  losetup -d "${LOOP_DEVICE}"             || true
+}
+trap image_post_cleanup EXIT
+
+[ -e "${LOOP_DEVICE}" ] || for N in {0..7}; do mknod /dev/loop$N -m0660 b 7 $N; done
+losetup "${LOOP_DEVICE}" "${IMAGE_PATH}"
+kpartx -a "${LOOP_DEVICE}"
+[ -e "${IMAGE_MOUNT}" ] || mkdir -p "${IMAGE_MOUNT}"
+mount "${MAPPER_P1_DEVICE}" "${IMAGE_MOUNT}"
+mount -o bind "/dev" "${IMAGE_MOUNT}/dev"
+mount -o ro,bind "/etc/resolv.conf" "${IMAGE_MOUNT}/etc/resolv.conf"
+mount -t tmpfs -o size=512m tmpfs "${IMAGE_MOUNT}/tmp"
+
+# Download service packages for installation at runtime
+cat >> "${IMAGE_MOUNT}/tmp/yum-tmp.conf" <<EOF
+[main]
+keepcache=0
+exactarch=1
+obsoletes=1
+plugins=0
+distroverpkg=centos-release
+debuglevel=2
+logfile=/dev/null
+reposdir=/dev/null
+
+[base]
+name=base
+baseurl=${REPO_BASE}
+enabled=1
+
+[updates]
+name=updates
+baseurl=${REPO_UPDATES}
+enabled=1
+
+[epel]
+name=epel
+baseurl=${REPO_EPEL}
+enabled=1
+
+[eucalyptus]
+name=eucalyptus
+baseurl=${REPO_EUCALYPTUS}
+enabled=1
+
+[euca2ools]
+name=euca2ools
+baseurl=${REPO_EUCA2OOLS}
+enabled=1
+EOF
+
+chroot "${IMAGE_MOUNT}" yumdownloader --resolve --config=/tmp/yum-tmp.conf --destdir=/var/lib/eucalyptus-service-image/packages eucalyptus-imaging-worker load-balancer-servo euca2ools
+chroot "${IMAGE_MOUNT}" createrepo /var/lib/eucalyptus-service-image/packages
+
+# Configure service packages repository
+cat > "${IMAGE_MOUNT}/etc/yum.repos.d/eucalyptus-service-image.repo" << "EOF"
+[eucalyptus-service-image]
+name=Eucalyptus Service Image Packages - $basearch
+baseurl=file:///var/lib/eucalyptus-service-image/packages
+enabled=1
+gpgcheck=0
+skip_if_unavailable=1
+EOF
+
+rm -rf "${IMAGE_MOUNT}/var/lib/yum/uuid"
+rm -rf "${IMAGE_MOUNT}/var/cache/yum/"*
+
