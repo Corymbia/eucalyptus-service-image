@@ -30,6 +30,7 @@ audit
 bash
 chkconfig
 cloud-init
+cloud-utils-growpart
 coreutils
 createrepo
 curl
